@@ -30,6 +30,7 @@ from tqdm import tqdm
 import sqlite3
 import sys
 import re
+import html
 
 
 @dataclass
@@ -61,7 +62,7 @@ def generate_arguments(arguments: List[str]) -> (List[str], Dict[str, str]):
     # Track if any positional arguments occur after keyword arguments (illegal)
     keywords = False
     
-    for argument in arguments:
+    for argument in map(html.unescape ,arguments):
         if "=" in argument:
             keywords = True
             split_index = argument.index("=")
