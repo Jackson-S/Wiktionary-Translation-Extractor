@@ -8,7 +8,7 @@
 ```sql
 CREATE TABLE Translations (
     word STRING NON NULL,        -- The root word that is translated
-    meaning STRING NON NULL,     -- The related meaning or sense of the word, for the translation
+    meaning STRING,              -- The related meaning or sense of the word, for the translation
     language STRING NON NULL,    -- The language of the translation as an ISO code
     translation STRING NON NULL, -- The actual translation, in the native script
     isEquivalent BOOL NON NULL,  -- Specifies if the translation is direct or if it is a phrase equivalent
