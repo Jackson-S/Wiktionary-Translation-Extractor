@@ -198,7 +198,7 @@ CREATE TABLE Translations (
 for word, meaning_group in translations.items():
     for group in meaning_group:
         for translation in group.translations:
-            if LANGAUGES and translation.language_code in LANGAUGES:
+            if translation.language_code in LANGAUGES or not LANGAUGES:
                 parameters = (
                     word,
                     group.meaning,
