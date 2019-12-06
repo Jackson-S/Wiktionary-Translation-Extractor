@@ -33,6 +33,10 @@ import re
 import html
 
 
+# Define which languages you want in the output database. None or [] for all languages.
+LANGAUGES = []
+
+
 @dataclass
 class Translation:
     language_code: str
@@ -86,16 +90,20 @@ def decode_term(arguments: List[str]) -> Translation:
         raise TypeError("Incorrect list type")
 
     positional, keyword = generate_arguments(arguments[1:])
+
+    equivalent_term = True
     
     if len(positional) < 2:
         raise TypeError("Missing required positional arguments")
 
-    result = Translation(positional[0], positional[1])
-
     # Check to see if the given translation is a phrase, with individually linked words
-    if "[[" and "]]" in arguments[1]:
-        result.is_equivalent_term = False
-        result.translation = result.translation.replace("[[", "").replace("]]", "")
+    if "[[" and "]]" in positional[1]:
+        equivalent_term = False
+    
+    positional = [*map(lambda x: x.replace("[[", "").replace("]]", ""), positional)]
+    keyword = {a: b.replace("[[", "").replace("]]", "") for a, b in keyword.items()}
+
+    result = Translation(positional[0], positional[1], equivalent_term)
 
     # Add gender
     if len(positional) >= 3:
@@ -131,37 +139,42 @@ with open(sys.argv[1]) as in_file:
             if page_title.endswith("/translations"):
                 page_title = page_title[:-13]
 
-        elif "{{trans-top|" in line:
+        elif "{{trans-top" in line:
             # Begin parsing translations and get the meaning
             recording = True
-            meaning = line.strip()[12:-2]
+            parameters = line.strip()[:-2].split("|")
+            meaning = ""
+            if len(parameters) > 2 and parameters[1].startswith("id="):
+                meaning = parameters[2]
+            elif len(parameters) > 1:
+                meaning = parameters[1]
             group = TranslationGroup(meaning, [])
 
         elif "{{trans-bottom}}" in line:
             # Finish parsing translations
             recording = False
-            translations[page_title].append(group)
+            if group.translations:
+                translations[page_title].append(group)
         
         elif "{{trans-mid}}" in line:
             # Mid is useless to us, defines layout on Wiktionary
             pass
 
         elif recording:
-            for translation in line.split(","):
-                qualifier = None
-                
-                # Find all the Lua codeblocks in the line, split them and remove the enclosing {{ }}
-                for codeblock in map(lambda x: x.group(0)[2:-2].split("|"), re.finditer(r"{{.*?}}", translation)):
-                    if codeblock[0] == "qualifier" and len(codeblock) > 1:
-                        # Run a join just in case the qualifier included a "|" for some reason...
-                        qualifier = "|".join(codeblock[1:])
-                    else:
-                        try:
-                            new_entry = decode_term(codeblock)
-                            new_entry.qualifier = qualifier
-                            group.translations.append(new_entry)
-                        except TypeError as e:
-                            continue
+            qualifier = None
+            
+            # Find all the Lua codeblocks in the line, split them and remove the enclosing {{ }}
+            for codeblock in map(lambda x: x.group(0)[2:-2].split("|"), re.finditer(r"{{.*?}}", line)):
+                if codeblock[0] == "qualifier" and len(codeblock) > 1:
+                    # Run a join just in case the qualifier included a "|" for some reason...
+                    qualifier = "|".join(codeblock[1:])
+                else:
+                    try:
+                        new_entry = decode_term(codeblock)
+                    except TypeError as e:
+                        continue
+                    new_entry.qualifier = qualifier
+                    group.translations.append(new_entry)
 
 db = sqlite3.connect("database.db")
 cursor = db.cursor()
@@ -185,20 +198,21 @@ CREATE TABLE Translations (
 for word, meaning_group in translations.items():
     for group in meaning_group:
         for translation in group.translations:
-            parameters = (
-                word,
-                group.meaning,
-                translation.language_code,
-                translation.translation,
-                translation.is_equivalent_term,
-                translation.gender,
-                translation.script_code,
-                translation.transliteration,
-                translation.alternate_form,
-                translation.literal_translation,
-                translation.qualifier
-            )
-            cursor.execute("INSERT INTO Translations VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", parameters)
+            if LANGAUGES and translation.language_code in LANGAUGES:
+                parameters = (
+                    word,
+                    group.meaning,
+                    translation.language_code,
+                    translation.translation,
+                    translation.is_equivalent_term,
+                    translation.gender,
+                    translation.script_code,
+                    translation.transliteration,
+                    translation.alternate_form,
+                    translation.literal_translation,
+                    translation.qualifier
+                )
+                cursor.execute("INSERT INTO Translations VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", parameters)
 
 cursor.close()
 db.commit()
