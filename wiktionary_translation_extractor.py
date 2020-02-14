@@ -126,7 +126,7 @@ def decode_term(arguments: List[str]) -> Translation:
 
 translations = defaultdict(list)
 
-with open(sys.argv[1]) as in_file:
+with open(sys.argv[1], encoding="utf-8") as in_file:
     page_title = None
     recording = False
     group = None
